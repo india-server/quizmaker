@@ -1,7 +1,3 @@
-"""
-SYNAPSE TELEGRAM BOT v4
-Page range support added — "page 5 to 20" likhke specific pages process karo
-"""
 
 import os, io, json, logging, requests, tempfile, threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
