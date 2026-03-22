@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-pymupdf
-pymongo
-groq
-python-multipart
-python-dotenv
