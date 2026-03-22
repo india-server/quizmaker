@@ -3,7 +3,8 @@ SYNAPSE TELEGRAM BOT v4
 Page range support added — "page 5 to 20" likhke specific pages process karo
 """
 
-import os, io, json, logging, requests, tempfile
+import os, io, json, logging, requests, tempfile, threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -427,10 +428,31 @@ async def non_pdf(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 # ── Main ─────────────────────────────────────
 
+# ── Health check HTTP server (Render ke liye port bind) ────────
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"Synapse Bot is running OK")
+    def log_message(self, fmt, *args):
+        pass  # silence HTTP logs
+
+def run_health_server():
+    port = int(os.getenv("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    log.info(f"Health server on port {port}")
+    server.serve_forever()
+
+
 def main():
     if not BOT_TOKEN:
         print("❌ BOT_TOKEN .env mein set karo!")
         return
+
+    # Start health check server in background thread (Render port binding)
+    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread.start()
 
     # v22 compatible — timeouts in builder, not run_polling
     app = (
@@ -458,8 +480,8 @@ def main():
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
-        conversation_timeout=600,
         per_message=False,
+        # conversation_timeout removed — needs job-queue package
     )
 
     app.add_handler(CommandHandler("start", cmd_start))
@@ -468,13 +490,16 @@ def main():
     app.add_handler(conv)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, non_pdf))
 
-    print("=" * 45)
-    print("⚡ Synapse Bot v4 running!")
-    print(f"   Backend: {BACKEND_URL}")
-    print("   Page range support: ON")
-    print("=" * 45)
+    print("=" * 50)
+    print("⚡ Synapse Bot v4 — Render Deployment")
+    print(f"   Backend : {BACKEND_URL}")
+    print(f"   Port    : {os.getenv('PORT', 10000)} (health check)")
+    print("=" * 50)
 
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    app.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True,
+    )
 
 
 if __name__ == "__main__":
